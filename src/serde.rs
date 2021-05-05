@@ -11,19 +11,17 @@
 extern crate serde;
 
 use std::fmt;
-use std::hash::{Hash, BuildHasher};
 use std::marker::PhantomData;
 
 use self::serde::{Deserialize, Deserializer, Serialize, Serializer};
 use self::serde::de::{MapAccess, Visitor};
 
-use MultiMap;
+use BTreeMultiMap;
 
 
-impl<K, V, BS> Serialize for MultiMap<K, V, BS>
-    where K: Serialize + Eq + Hash,
+impl<K, V> Serialize for BTreeMultiMap<K, V>
+    where K: Serialize + Ord,
           V: Serialize,
-          BS: BuildHasher
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: Serializer
@@ -32,26 +30,25 @@ impl<K, V, BS> Serialize for MultiMap<K, V, BS>
     }
 }
 
-impl<K, V, S> MultiMapVisitor<K, V, S>
-    where K: Hash + Eq
+impl<K, V> BTreeMultiMapVisitor<K, V>
+    where K: Ord
 {
     fn new() -> Self {
-        MultiMapVisitor {
+        BTreeMultiMapVisitor {
             marker: PhantomData
         }
     }
 }
 
-struct MultiMapVisitor<K, V, S> {
-    marker: PhantomData<MultiMap<K, V, S>>
+struct BTreeMultiMapVisitor<K, V> {
+    marker: PhantomData<BTreeMultiMap<K, V>>
 }
 
-impl<'a, K, V, S> Visitor<'a> for MultiMapVisitor<K, V, S>
-    where K: Deserialize<'a> + Eq + Hash,
+impl<'a, K, V> Visitor<'a> for BTreeMultiMapVisitor<K, V>
+    where K: Deserialize<'a> + Ord,
           V: Deserialize<'a>,
-          S: BuildHasher + Default
 {
-    type Value = MultiMap<K, V, S>;
+    type Value = BTreeMultiMap<K, V>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("expected a map")
@@ -60,7 +57,7 @@ impl<'a, K, V, S> Visitor<'a> for MultiMapVisitor<K, V, S>
     fn visit_map<M>(self, mut visitor: M) -> Result<Self::Value, M::Error>
         where M: MapAccess<'a>
     {
-        let mut values = MultiMap::with_capacity_and_hasher(visitor.size_hint().unwrap_or(0), S::default());
+        let mut values = BTreeMultiMap::new();
 
         while let Some((key, value)) = visitor.next_entry()? {
             values.inner.insert(key, value);
@@ -70,15 +67,14 @@ impl<'a, K, V, S> Visitor<'a> for MultiMapVisitor<K, V, S>
     }
 }
 
-impl<'a, K, V, S> Deserialize<'a> for MultiMap<K, V, S>
-    where K: Deserialize<'a> + Eq + Hash,
+impl<'a, K, V> Deserialize<'a> for BTreeMultiMap<K, V>
+    where K: Deserialize<'a> + Ord,
           V: Deserialize<'a>,
-          S: BuildHasher + Default
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where D: Deserializer<'a>
     {
-        deserializer.deserialize_map(MultiMapVisitor::<K, V, S>::new())
+        deserializer.deserialize_map(BTreeMultiMapVisitor::<K, V>::new())
     }
 }
 
@@ -94,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        let map = MultiMap::<char, u8>::new();
+        let map = BTreeMultiMap::<char, u8>::new();
 
         assert_tokens(&map, &[
             Token::Map { len: Some(0) },
@@ -104,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_single() {
-        let mut map = MultiMap::<char, u8>::new();
+        let mut map = BTreeMultiMap::<char, u8>::new();
         map.insert('x', 1);
 
         assert_tokens(&map, &[
@@ -119,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_multiple() {
-        let mut map = MultiMap::<char, u8>::new();
+        let mut map = BTreeMultiMap::<char, u8>::new();
         map.insert('x', 1);
         map.insert('x', 3);
         map.insert('x', 1);

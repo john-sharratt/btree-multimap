@@ -6,19 +6,19 @@
 // option. All files in the project carrying such notice may not be copied,
 // modified, or distributed except according to those terms.
 
-use std::collections::hash_map::OccupiedEntry as HashMapOccupiedEntry;
-use std::collections::hash_map::VacantEntry as HashMapVacantEntry;
+use std::collections::btree_map::OccupiedEntry as BTreeMapOccupiedEntry;
+use std::collections::btree_map::VacantEntry as BTreeMapVacantEntry;
 
-/// A view into a single occupied location in a MultiMap.
+/// A view into a single occupied location in a BTreeMultiMap.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
     #[doc(hidden)]
-    pub inner: HashMapOccupiedEntry<'a, K, Vec<V>>,
+    pub inner: BTreeMapOccupiedEntry<'a, K, Vec<V>>,
 }
 
-/// A view into a single empty location in a MultiMap.
+/// A view into a single empty location in a BTreeMultiMap.
 pub struct VacantEntry<'a, K: 'a, V: 'a> {
     #[doc(hidden)]
-    pub inner: HashMapVacantEntry<'a, K, Vec<V>>,
+    pub inner: BTreeMapVacantEntry<'a, K, Vec<V>>,
 }
 
 /// A view into a single location in a map, which may be vacant or occupied.
@@ -30,7 +30,7 @@ pub enum Entry<'a, K: 'a, V: 'a> {
     Vacant(VacantEntry<'a, K, V>),
 }
 
-impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V> {
+impl<'a, K: 'a + Ord, V: 'a> OccupiedEntry<'a, K, V>{
     /// Gets a reference to the first item in value in the vector corresponding to entry.
     pub fn get(&self) -> &V {
         &self.inner.get()[0]
@@ -79,7 +79,7 @@ impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V> {
     }
 }
 
-impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V> {
+impl<'a, K: 'a + Ord, V: 'a> VacantEntry<'a, K, V> {
     /// Sets the first value in the vector of the entry with the VacantEntry's key,
     /// and returns a mutable reference to it.
     pub fn insert(self, value: V) -> &'a mut V {
@@ -94,7 +94,7 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V> {
 }
 
 
-impl<'a, K: 'a, V: 'a> Entry<'a, K, V> {
+impl<'a, K: 'a + Ord, V: 'a> Entry<'a, K, V> {
     /// Ensures a value is in the entry by inserting the default if empty, and returns
     /// a mutable reference to the value in the entry. This will return a mutable reference to the
     /// first value in the vector corresponding to the specified key.

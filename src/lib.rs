@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-// Copyright (c) 2016 multimap developers
+// Copyright (c) 2016 btree multimap developers
 //
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -7,23 +7,23 @@
 // option. All files in the project carrying such notice may not be copied,
 // modified, or distributed except according to those terms.
 
-//! A MultiMap implementation which is just a wrapper around std::collections::HashMap.
-//! See HashMap's documentation for more details.
+//! A BTreeMultiMap implementation which is just a wrapper around std::collections::BTreeMap.
+//! See BTreeMap's documentation for more details.
 //!
 //! Some of the methods are just thin wrappers, some methods does change a little semantics
-//! and some methods are new (doesn't have an equivalent in HashMap.)
+//! and some methods are new (doesn't have an equivalent in BTreeMap.)
 //!
-//! The MultiMap is generic for the key (K) and the value (V). Internally the values are
+//! The BTreeMultiMap is generic for the key (K) and the value (V). Internally the values are
 //! stored in a generic Vector.
 //!
 //! # Examples
 //!
 //! ```
-//! use multimap::MultiMap;
+//! use btreemultimap::BTreeMultiMap;
 //!
-//! // create a new MultiMap. An explicit type signature can be omitted because of the
+//! // create a new BTreeMultiMap. An explicit type signature can be omitted because of the
 //! // type inference.
-//! let mut queries = MultiMap::new();
+//! let mut queries = BTreeMultiMap::new();
 //!
 //! // insert some queries.
 //! queries.insert("urls", "http://rust-lang.org");
@@ -33,7 +33,7 @@
 //! queries.insert("name", "roger");
 //!
 //! // check if there's any urls.
-//! println!("Are there any urls in the multimap? {:?}.",
+//! println!("Are there any urls in the btree multimap? {:?}.",
 //!     if queries.contains_key("urls") {"Yes"} else {"No"} );
 //!
 //! // get the first item in a key's vector.
@@ -49,12 +49,12 @@
 //! }
 //!
 //! // iterate over all keys and the key's vector.
-//! for (key, values) in queries.iter_all() {
+//! for (key, values) in queries.iter() {
 //!     println!("key: {:?}, values: {:?}", key, values);
 //! }
 //!
-//! // the different methods for getting value(s) from the multimap.
-//! let mut map = MultiMap::new();
+//! // the different methods for getting value(s) from the btree multimap.
+//! let mut map = BTreeMultiMap::new();
 //!
 //! map.insert("key1", 42);
 //! map.insert("key1", 1337);
@@ -65,15 +65,12 @@
 //! ```
 
 use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::collections::hash_map::{Keys, IntoIter, RandomState};
+use std::collections::BTreeMap;
+use std::collections::btree_map::{Keys, IntoIter};
+use std::collections::btree_map::{Range, RangeMut};
 use std::fmt::{self, Debug};
 use std::iter::{Iterator, IntoIterator, FromIterator};
-use std::hash::{Hash, BuildHasher};
-use std::ops::Index;
-
-pub use std::collections::hash_map::Iter as IterAll;
-pub use std::collections::hash_map::IterMut as IterAllMut;
+use std::ops::{Index, RangeBounds};
 
 pub use entry::{Entry, OccupiedEntry, VacantEntry};
 
@@ -83,88 +80,40 @@ mod entry;
 pub mod serde;
 
 #[derive(Clone)]
-pub struct MultiMap<K, V, S = RandomState> {
-    inner: HashMap<K, Vec<V>, S>,
+pub struct BTreeMultiMap<K, V> {
+    inner: BTreeMap<K, Vec<V>>,
 }
 
-impl<K, V> MultiMap<K, V>
-    where K: Eq + Hash
+impl<K, V> BTreeMultiMap<K, V>
+    where K: Ord
 {
-    /// Creates an empty MultiMap
+    /// Creates an empty BTreeMultiMap
     ///
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map: MultiMap<&str, isize> = MultiMap::new();
+    /// let mut map: BTreeMultiMap<&str, isize> = BTreeMultiMap::new();
     /// ```
-    pub fn new() -> MultiMap<K, V> {
-        MultiMap { inner: HashMap::new() }
-    }
-
-    /// Creates an empty multimap with the given initial capacity.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use multimap::MultiMap;
-    ///
-    /// let mut map: MultiMap<&str, isize> = MultiMap::with_capacity(20);
-    /// ```
-    pub fn with_capacity(capacity: usize) -> MultiMap<K, V> {
-        MultiMap { inner: HashMap::with_capacity(capacity) }
+    pub fn new() -> BTreeMultiMap<K, V> {
+        BTreeMultiMap { inner: BTreeMap::new() }
     }
 }
 
-impl<K, V, S> MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher,
+impl<K, V> BTreeMultiMap<K, V>
+    where K: Ord,
 {
-    /// Creates an empty MultiMap which will use the given hash builder to hash keys.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use multimap::MultiMap;
-    /// use std::collections::hash_map::RandomState;
-    ///
-    /// let s = RandomState::new();
-    /// let mut map: MultiMap<&str, isize> = MultiMap::with_hasher(s);
-    /// ```
-    pub fn with_hasher(hash_builder: S) -> MultiMap<K, V, S> {
-        MultiMap {
-            inner: HashMap::with_hasher(hash_builder)
-        }
-    }
-
-    /// Creates an empty MultiMap with the given intial capacity and hash builder.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use multimap::MultiMap;
-    /// use std::collections::hash_map::RandomState;
-    ///
-    /// let s = RandomState::new();
-    /// let mut map: MultiMap<&str, isize> = MultiMap::with_capacity_and_hasher(20, s);
-    /// ```
-    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> MultiMap<K, V, S> {
-        MultiMap {
-            inner: HashMap::with_capacity_and_hasher(capacity, hash_builder)
-        }
-    }
-
-    /// Inserts a key-value pair into the multimap. If the key does exist in
+    /// Inserts a key-value pair into the btreemultimap. If the key does exist in
     /// the map then the value is pushed to that key's vector. If the key doesn't
     /// exist in the map a new vector with the given value is inserted.
     ///
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert("key", 42);
     /// ```
     pub fn insert(&mut self, k: K, v: V) {
@@ -178,7 +127,7 @@ impl<K, V, S> MultiMap<K, V, S>
         }
     }
 
-    /// Inserts multiple key-value pairs into the multimap. If the key does exist in
+    /// Inserts multiple key-value pairs into the btree multimap. If the key does exist in
     /// the map then the values are extended into that key's vector. If the key
     /// doesn't exist in the map a new vector collected from the given values is inserted.
     ///
@@ -187,9 +136,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::<&str, &usize>::new();
+    /// let mut map = BTreeMultiMap::<&str, &usize>::new();
     /// map.insert_many("key", &[42, 43]);
     /// ```
     pub fn insert_many<I: IntoIterator<Item = V>>(&mut self, k: K, v: I) {
@@ -203,7 +152,7 @@ impl<K, V, S> MultiMap<K, V, S>
         }
     }
 
-    /// Inserts multiple key-value pairs into the multimap. If the key does exist in
+    /// Inserts multiple key-value pairs into the btree multimap. If the key does exist in
     /// the map then the values are extended into that key's vector. If the key
     /// doesn't exist in the map a new vector collected from the given values is inserted.
     ///
@@ -212,9 +161,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::<&str, usize>::new();
+    /// let mut map = BTreeMultiMap::<&str, usize>::new();
     /// map.insert_many_from_slice("key", &[42, 43]);
     /// ```
     pub fn insert_many_from_slice(&mut self, k: K, v: &[V])
@@ -239,16 +188,16 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// assert_eq!(map.contains_key(&1), true);
     /// assert_eq!(map.contains_key(&2), false);
     /// ```
     pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
         self.inner.contains_key(k)
     }
@@ -258,15 +207,16 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
+    /// map.insert(1, 52);
     /// map.insert(2, 1337);
-    /// assert_eq!(map.len(), 2);
+    /// assert_eq!(map.len(), 3);
     /// ```
     pub fn len(&self) -> usize {
-        self.inner.len()
+        self.iter().len()
     }
 
     /// Removes a key from the map, returning the vector of values at
@@ -278,9 +228,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// map.insert(1, 1337);
     /// assert_eq!(map.remove(&1), Some(vec![42, 1337]));
@@ -288,7 +238,7 @@ impl<K, V, S> MultiMap<K, V, S>
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<Vec<V>>
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
         self.inner.remove(k)
     }
@@ -302,18 +252,18 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// map.insert(1, 1337);
     /// assert_eq!(map.get(&1), Some(&42));
     /// ```
     pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
-        self.inner.get(k).map(|v| &v[0])
+        self.inner.get(k).map(|a| a.iter().next()).flatten()
     }
 
     /// Returns a mutable reference to the first item in the vector corresponding to
@@ -325,9 +275,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// map.insert(1, 1337);
     /// if let Some(v) = map.get_mut(&1) {
@@ -337,9 +287,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// ```
     pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
-        self.inner.get_mut(k).map(|v| v.get_mut(0).unwrap())
+        self.inner.get_mut(k).map(|a| a.iter_mut().next()).flatten()
     }
 
     /// Returns a reference to the vector corresponding to the key.
@@ -350,18 +300,41 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// map.insert(1, 1337);
     /// assert_eq!(map.get_vec(&1), Some(&vec![42, 1337]));
     /// ```
     pub fn get_vec<Q: ?Sized>(&self, k: &Q) -> Option<&Vec<V>>
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
         self.inner.get(k)
+    }
+    
+    /// Returns the key-value pair corresponding to the supplied key.
+    ///
+    /// The supplied key may be any borrowed form of the map's key type, but the ordering
+    /// on the borrowed form *must* match the ordering on the key type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use btreemultimap::BTreeMultiMap;
+    ///
+    /// let mut map = BTreeMultiMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.get_key_values(&1), Some((&1, &vec!["a"])));
+    /// assert_eq!(map.get_key_values(&2), None);
+    /// ```
+    pub fn get_key_values<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &Vec<V>)>
+    where
+        K: Borrow<Q>,
+        Q: Ord,
+    {
+        self.inner.get_key_value(k)
     }
 
     /// Returns a mutable reference to the vector corresponding to the key.
@@ -372,9 +345,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// map.insert(1, 1337);
     /// if let Some(v) = map.get_vec_mut(&1) {
@@ -385,7 +358,7 @@ impl<K, V, S> MultiMap<K, V, S>
     /// ```
     pub fn get_vec_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut Vec<V>>
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
         self.inner.get_mut(k)
     }
@@ -398,9 +371,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1, 42);
     /// map.insert(1, 1337);
     /// map.insert(2, 2332);
@@ -411,7 +384,7 @@ impl<K, V, S> MultiMap<K, V, S>
     /// ```
     pub fn is_vec<Q: ?Sized>(&self, k: &Q) -> bool
         where K: Borrow<Q>,
-              Q: Eq + Hash
+              Q: Ord
     {
         match self.get_vec(k) {
             Some(val) => { val.len() > 1 }
@@ -419,29 +392,14 @@ impl<K, V, S> MultiMap<K, V, S>
         }
     }
 
-
-    /// Returns the number of elements the map can hold without reallocating.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use multimap::MultiMap;
-    ///
-    /// let map: MultiMap<usize, usize> = MultiMap::new();
-    /// assert!(map.capacity() >= 0);
-    /// ```
-    pub fn capacity(&self) -> usize {
-        self.inner.capacity()
-    }
-
     /// Returns true if the map contains no elements.
     ///
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// assert!(map.is_empty());
     /// map.insert(1,42);
     /// assert!(!map.is_empty());
@@ -456,9 +414,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1,42);
     /// map.clear();
     /// assert!(map.is_empty());
@@ -473,9 +431,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1,42);
     /// map.insert(2,1337);
     /// map.insert(4,1991);
@@ -495,9 +453,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1,42);
     /// map.insert(1,1337);
     /// map.insert(3,2332);
@@ -507,8 +465,11 @@ impl<K, V, S> MultiMap<K, V, S>
     ///     println!("key: {:?}, val: {:?}", key, value);
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<K, V> {
-        Iter { inner: self.inner.iter() }
+    pub fn iter(&self) -> MultiIter<K, V> {
+        MultiIter { 
+            vec: None,
+            inner: self.inner.iter()
+        }
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The iterator returns
@@ -518,9 +479,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut map = MultiMap::new();
+    /// let mut map = BTreeMultiMap::new();
     /// map.insert(1,42);
     /// map.insert(1,1337);
     /// map.insert(3,2332);
@@ -534,60 +495,11 @@ impl<K, V, S> MultiMap<K, V, S>
     ///     println!("key: {:?}, val: {:?}", key, value);
     /// }
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        IterMut { inner: self.inner.iter_mut() }
-    }
-
-    /// An iterator visiting all key-value pairs in arbitrary order. The iterator returns
-    /// a reference to the key and the corresponding key's vector.
-    /// Iterator element type is (&'a K, &'a V).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use multimap::MultiMap;
-    ///
-    /// let mut map = MultiMap::new();
-    /// map.insert(1,42);
-    /// map.insert(1,1337);
-    /// map.insert(3,2332);
-    /// map.insert(4,1991);
-    ///
-    /// for (key, values) in map.iter_all() {
-    ///     println!("key: {:?}, values: {:?}", key, values);
-    /// }
-    /// ```
-    pub fn iter_all(&self) -> IterAll<K, Vec<V>> {
-        self.inner.iter()
-    }
-
-    /// An iterator visiting all key-value pairs in arbitrary order. The iterator returns
-    /// a reference to the key and the corresponding key's vector.
-    /// Iterator element type is (&'a K, &'a V).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use multimap::MultiMap;
-    ///
-    /// let mut map = MultiMap::new();
-    /// map.insert(1,42);
-    /// map.insert(1,1337);
-    /// map.insert(3,2332);
-    /// map.insert(4,1991);
-    ///
-    /// for (key, values) in map.iter_all_mut() {
-    ///     for value in values.iter_mut() {
-    ///         *value = 99;
-    ///     }
-    /// }
-    ///
-    /// for (key, values) in map.iter_all() {
-    ///     println!("key: {:?}, values: {:?}", key, values);
-    /// }
-    /// ```
-    pub fn iter_all_mut(&mut self) -> IterAllMut<K, Vec<V>> {
-        self.inner.iter_mut()
+    pub fn iter_mut(&mut self) -> MultiIterMut<K, V> {
+        MultiIterMut {
+            vec: None,
+            inner: self.inner.iter_mut()
+        }
     }
 
     /// Gets the specified key's corresponding entry in the map for in-place manipulation.
@@ -597,9 +509,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut m = MultiMap::new();
+    /// let mut m = BTreeMultiMap::new();
     /// m.insert(1, 42);
     ///
     /// {
@@ -619,10 +531,10 @@ impl<K, V, S> MultiMap<K, V, S>
     /// assert_eq!(m.get_vec(&1), Some(&vec![44, 50]));
     /// ```
     pub fn entry(&mut self, k: K) -> Entry<K, V> {
-        use std::collections::hash_map::Entry as HashMapEntry;
+        use std::collections::btree_map::Entry as BTreeMapEntry;
         match self.inner.entry(k) {
-            HashMapEntry::Occupied(entry) => Entry::Occupied(OccupiedEntry { inner: entry }),
-            HashMapEntry::Vacant(entry) => Entry::Vacant(VacantEntry { inner: entry }),
+            BTreeMapEntry::Occupied(entry) => Entry::Occupied(OccupiedEntry { inner: entry }),
+            BTreeMapEntry::Vacant(entry) => Entry::Vacant(VacantEntry { inner: entry }),
         }
     }
 
@@ -633,9 +545,9 @@ impl<K, V, S> MultiMap<K, V, S>
     /// # Examples
     ///
     /// ```
-    /// use multimap::MultiMap;
+    /// use btreemultimap::BTreeMultiMap;
     ///
-    /// let mut m = MultiMap::new();
+    /// let mut m = BTreeMultiMap::new();
     /// m.insert(1, 42);
     /// m.insert(1, 99);
     /// m.insert(2, 42);
@@ -644,19 +556,243 @@ impl<K, V, S> MultiMap<K, V, S>
     /// assert_eq!(Some(&42), m.get(&1));
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
-        where F: FnMut(&K, &V) -> bool
+        where F: FnMut(&K, &V) -> bool,
+              K: Clone
     {
+        let mut to_remove = Vec::new();
         for (key, vector) in &mut self.inner {
             vector.retain(|ref value| f(key, value));
+            if vector.is_empty() {
+                to_remove.push(key.clone());
+            }
         }
-        self.inner.retain(|&_, ref v| !v.is_empty());
+        for key in to_remove {
+            self.inner.remove(&key);
+        }
+    }
+
+    /// Constructs a double-ended iterator over a sub-range of elements in the map.
+    /// The simplest way is to use the range syntax `min..max`, thus `range(min..max)` will
+    /// yield elements from min (inclusive) to max (exclusive).
+    /// The range may also be entered as `(Bound<T>, Bound<T>)`, so for example
+    /// `range((Excluded(4), Included(10)))` will yield a left-exclusive, right-inclusive
+    /// range from 4 to 10.
+    ///
+    /// # Panics
+    ///
+    /// Panics if range `start > end`.
+    /// Panics if range `start == end` and both bounds are `Excluded`.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use btreemultimap::BTreeMultiMap;
+    /// use std::ops::Bound::Included;
+    ///
+    /// let mut map = BTreeMultiMap::new();
+    /// map.insert(3, "a");
+    /// map.insert(5, "b");
+    /// map.insert(5, "c");
+    /// map.insert(8, "c");
+    /// map.insert(9, "d");
+    /// for (&key, &value) in map.range((Included(&4), Included(&8))) {
+    ///     println!("{}: {}", key, value);
+    /// }
+    /// let mut iter = map.range(4..=8);
+    /// assert_eq!(Some((&5, &"b")), iter.next());
+    /// assert_eq!(Some((&5, &"c")), iter.next());
+    /// assert_eq!(Some((&8, &"c")), iter.next());
+    /// assert_eq!(None, iter.next());
+    /// ```
+    pub fn range<T: ?Sized, R>(&self, range: R) -> MultiRange<'_, K, V>
+    where
+        T: Ord,
+        K: Borrow<T>,
+        R: RangeBounds<T>,
+    {
+        MultiRange {
+            vec: None,
+            inner: self.inner.range(range)
+        }
+    }
+
+    /// Constructs a mutable double-ended iterator over a sub-range of elements in the map.
+    /// The simplest way is to use the range syntax `min..max`, thus `range(min..max)` will
+    /// yield elements from min (inclusive) to max (exclusive).
+    /// The range may also be entered as `(Bound<T>, Bound<T>)`, so for example
+    /// `range((Excluded(4), Included(10)))` will yield a left-exclusive, right-inclusive
+    /// range from 4 to 10.
+    ///
+    /// # Panics
+    ///
+    /// Panics if range `start > end`.
+    /// Panics if range `start == end` and both bounds are `Excluded`.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use btreemultimap::BTreeMultiMap;
+    ///
+    /// let mut map: BTreeMultiMap<&str, i32> = ["Alice", "Bob", "Carol", "Cheryl"]
+    ///     .iter()
+    ///     .map(|&s| (s, 0))
+    ///     .collect();
+    /// for (_, balance) in map.range_mut("B".."Cheryl") {
+    ///     *balance += 100;
+    /// }
+    /// for (name, balance) in &map {
+    ///     println!("{} => {}", name, balance);
+    /// }
+    /// ```
+    pub fn range_mut<T: ?Sized, R>(&mut self, range: R) -> MultiRangeMut<'_, K, V>
+    where
+        T: Ord,
+        K: Borrow<T>,
+        R: RangeBounds<T>,
+    {
+        MultiRangeMut {
+            vec: None,
+            inner: self.inner.range_mut(range)
+        }
     }
 }
 
-impl<'a, K, V, S, Q: ?Sized> Index<&'a Q> for MultiMap<K, V, S>
-    where K: Eq + Hash + Borrow<Q>,
-          Q: Eq + Hash,
-          S: BuildHasher,
+#[derive(Clone)]
+pub struct MultiRange<'a, K, V>
+{
+    vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
+    inner: Range<'a, K, Vec<V>>
+}
+
+impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for MultiRange<'_, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<'a, K, V> Iterator for MultiRange<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<(&'a K, &'a V)> {
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
+    }
+
+    fn last(mut self) -> Option<(&'a K, &'a V)> {
+        self.next_back()
+    }
+
+    fn min(mut self) -> Option<(&'a K, &'a V)> {
+        self.next()
+    }
+
+    fn max(mut self) -> Option<(&'a K, &'a V)> {
+        self.next_back()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for MultiRange<'a, K, V> {
+    fn next_back(&mut self) -> Option<(&'a K, &'a V)> {
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next_back() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next_back() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
+    }
+}
+
+pub struct MultiRangeMut<'a, K, V>
+{
+    vec: Option<(&'a K, std::slice::IterMut<'a, V>)>,
+    inner: RangeMut<'a, K, Vec<V>>
+}
+
+impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for MultiRangeMut<'_, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<'a, K, V> Iterator for MultiRangeMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<(&'a K, &'a mut V)> {
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter_mut()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
+    }
+
+    fn last(mut self) -> Option<(&'a K, &'a mut V)> {
+        self.next_back()
+    }
+
+    fn min(mut self) -> Option<(&'a K, &'a mut V)> {
+        self.next()
+    }
+
+    fn max(mut self) -> Option<(&'a K, &'a mut V)> {
+        self.next_back()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for MultiRangeMut<'a, K, V> {
+    fn next_back(&mut self) -> Option<(&'a K, &'a mut V)> {
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next_back() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next_back() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter_mut()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
+    }
+}
+
+impl<'a, K, V, Q: ?Sized> Index<&'a Q> for BTreeMultiMap<K, V>
+    where K: Ord + Borrow<Q>,
+          Q: Ord,
 {
     type Output = V;
 
@@ -668,55 +804,49 @@ impl<'a, K, V, S, Q: ?Sized> Index<&'a Q> for MultiMap<K, V, S>
     }
 }
 
-impl<K, V, S> Debug for MultiMap<K, V, S>
-    where K: Eq + Hash + Debug,
+impl<K, V> Debug for BTreeMultiMap<K, V>
+    where K: Ord + Debug,
           V: Debug,
-          S: BuildHasher
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_map().entries(self.iter_all()).finish()
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
-impl<K, V, S> PartialEq for MultiMap<K, V, S>
-    where K: Eq + Hash,
+impl<K, V> PartialEq for BTreeMultiMap<K, V>
+    where K: Ord,
           V: PartialEq,
-          S: BuildHasher
 {
-    fn eq(&self, other: &MultiMap<K, V, S>) -> bool {
+    fn eq(&self, other: &BTreeMultiMap<K, V>) -> bool {
         if self.len() != other.len() {
             return false;
         }
 
-        self.iter_all().all(|(key, value)| other.get_vec(key).map_or(false, |v| *value == *v))
+        self.iter().zip(other.iter()).all(|(a, b)| a.0 == b.0 && a.1 == b.1)
     }
 }
 
-impl<K, V, S> Eq for MultiMap<K, V, S>
-    where K: Eq + Hash,
+impl<K, V> Eq for BTreeMultiMap<K, V>
+    where K: Ord,
           V: Eq,
-          S: BuildHasher
 {
 }
 
-impl<K, V, S> Default for MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher + Default
+impl<K, V> Default for BTreeMultiMap<K, V>
+    where K: Ord,
 {
-    fn default() -> MultiMap<K, V, S> {
-        MultiMap { inner: Default::default() }
+    fn default() -> BTreeMultiMap<K, V> {
+        BTreeMultiMap { inner: Default::default() }
     }
 }
 
-impl<K, V, S> FromIterator<(K, V)> for MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher + Default
+impl<K, V> FromIterator<(K, V)> for BTreeMultiMap<K, V>
+    where K: Ord,
 {
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(iterable: T) -> MultiMap<K, V, S> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iterable: T) -> BTreeMultiMap<K, V> {
         let iter = iterable.into_iter();
-        let hint = iter.size_hint().0;
-
-        let mut multimap = MultiMap::with_capacity_and_hasher(hint, S::default());
+        
+        let mut multimap = BTreeMultiMap::new();
         for (k, v) in iter {
             multimap.insert(k, v);
         }
@@ -725,33 +855,30 @@ impl<K, V, S> FromIterator<(K, V)> for MultiMap<K, V, S>
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher
+impl<'a, K, V> IntoIterator for &'a BTreeMultiMap<K, V>
+    where K: Ord,
 {
-    type Item = (&'a K, &'a Vec<V>);
-    type IntoIter = IterAll<'a, K, Vec<V>>;
+    type Item = (&'a K, &'a V);
+    type IntoIter = MultiIter<'a, K, V>;
 
-    fn into_iter(self) -> IterAll<'a, K, Vec<V>> {
-        self.iter_all()
+    fn into_iter(self) -> MultiIter<'a, K, V> {
+        self.iter()
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a mut MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher
+impl<'a, K, V> IntoIterator for &'a mut BTreeMultiMap<K, V>
+    where K: Ord,
 {
-    type Item = (&'a K, &'a mut Vec<V>);
-    type IntoIter = IterAllMut<'a, K, Vec<V>>;
+    type Item = (&'a K, &'a mut V);
+    type IntoIter = MultiIterMut<'a, K, V>;
 
-    fn into_iter(self) -> IterAllMut<'a, K, Vec<V>> {
-        self.inner.iter_mut()
+    fn into_iter(self) -> MultiIterMut<'a, K, V> {
+        self.iter_mut()
     }
 }
 
-impl<K, V, S> IntoIterator for MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher
+impl<K, V> IntoIterator for BTreeMultiMap<K, V>
+    where K: Ord,
 {
     type Item = (K, Vec<V>);
     type IntoIter = IntoIter<K, Vec<V>>;
@@ -761,9 +888,8 @@ impl<K, V, S> IntoIterator for MultiMap<K, V, S>
     }
 }
 
-impl<K, V, S> Extend<(K, V)> for MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher
+impl<K, V> Extend<(K, V)> for BTreeMultiMap<K, V>
+    where K: Ord,
 {
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
         for (k, v) in iter {
@@ -772,19 +898,17 @@ impl<K, V, S> Extend<(K, V)> for MultiMap<K, V, S>
     }
 }
 
-impl<'a, K, V, S> Extend<(&'a K, &'a V)> for MultiMap<K, V, S>
-    where K: Eq + Hash + Copy,
+impl<'a, K, V> Extend<(&'a K, &'a V)> for BTreeMultiMap<K, V>
+    where K: Ord + Copy,
           V: Copy,
-          S: BuildHasher
 {
     fn extend<T: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: T) {
         self.extend(iter.into_iter().map(|(&key, &value)| (key, value)));
     }
 }
 
-impl<K, V, S> Extend<(K, Vec<V>)> for MultiMap<K, V, S>
-    where K: Eq + Hash,
-          S: BuildHasher
+impl<K, V> Extend<(K, Vec<V>)> for BTreeMultiMap<K, V>
+    where K: Ord,
 {
     fn extend<T: IntoIterator<Item = (K, Vec<V>)>>(&mut self, iter: T) {
         for (k, values) in iter {
@@ -800,10 +924,9 @@ impl<K, V, S> Extend<(K, Vec<V>)> for MultiMap<K, V, S>
     }
 }
 
-impl<'a, K, V, S> Extend<(&'a K, &'a Vec<V>)> for MultiMap<K, V, S>
-    where K: Eq + Hash + Copy,
+impl<'a, K, V> Extend<(&'a K, &'a Vec<V>)> for BTreeMultiMap<K, V>
+    where K: Ord + Copy,
           V: Copy,
-          S: BuildHasher
 {
     fn extend<T: IntoIterator<Item = (&'a K, &'a Vec<V>)>>(&mut self, iter: T) {
         self.extend(iter.into_iter().map(|(&key, values)| (key, values.to_owned())));
@@ -811,61 +934,151 @@ impl<'a, K, V, S> Extend<(&'a K, &'a Vec<V>)> for MultiMap<K, V, S>
 }
 
 #[derive(Clone)]
-pub struct Iter<'a, K: 'a, V: 'a> {
-    inner: IterAll<'a, K, Vec<V>>,
+pub struct MultiIter<'a, K, V>
+{
+    vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
+    inner: std::collections::btree_map::Iter<'a, K, Vec<V>>
 }
 
-impl<'a, K, V> Iterator for Iter<'a, K, V> {
+impl<'a, K, V> Iterator for MultiIter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<(&'a K, &'a V)> {
-        self.inner.next().map(|(k, v)| (k, &v[0]))
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.inner.size_hint()
     }
-}
 
-impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
-    fn len(&self) -> usize {
-        self.inner.len()
+    fn last(mut self) -> Option<(&'a K, &'a V)> {
+        self.next_back()
+    }
+
+    fn min(mut self) -> Option<(&'a K, &'a V)> {
+        self.next()
+    }
+
+    fn max(mut self) -> Option<(&'a K, &'a V)> {
+        self.next_back()
     }
 }
 
-pub struct IterMut<'a, K: 'a, V: 'a> {
-    inner: IterAllMut<'a, K, Vec<V>>,
+impl<'a, K, V> ExactSizeIterator for MultiIter<'a, K, V> {
+    fn len(&self) -> usize {
+        let mut ret: usize = 0;
+        for pair in self.inner.clone() {
+            ret = ret + pair.1.len();
+        }
+        ret
+    }
 }
 
-impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+impl<'a, K, V> DoubleEndedIterator for MultiIter<'a, K, V> {
+    fn next_back(&mut self) -> Option<(&'a K, &'a V)> {
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next_back() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next_back() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
+    }
+}
+
+pub struct MultiIterMut<'a, K, V>
+{
+    vec: Option<(&'a K, std::slice::IterMut<'a, V>)>,
+    inner: std::collections::btree_map::IterMut<'a, K, Vec<V>>
+}
+
+impl<'a, K, V> Iterator for MultiIterMut<'a, K, V> {
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<(&'a K, &'a mut V)> {
-        self.inner.next().map(|(k, v)| (k, &mut v[0]))
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter_mut()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.inner.size_hint()
     }
+
+    fn last(mut self) -> Option<(&'a K, &'a mut V)> {
+        self.next_back()
+    }
+
+    fn min(mut self) -> Option<(&'a K, &'a mut V)> {
+        self.next()
+    }
+
+    fn max(mut self) -> Option<(&'a K, &'a mut V)> {
+        self.next_back()
+    }
 }
 
-impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
-    fn len(&self) -> usize {
-        self.inner.len()
+impl<'a, K, V> DoubleEndedIterator for MultiIterMut<'a, K, V> {
+    fn next_back(&mut self) -> Option<(&'a K, &'a mut V)> {
+        loop {
+            if let Some(a) = self.vec.as_mut() {
+                if let Some(ret) = a.1.next_back() {
+                    return Some((a.0, ret));
+                }
+            }
+            match self.inner.next_back() {
+                Some((a, b)) => {
+                    self.vec = Some((a, b.iter_mut()));
+                    continue;
+                }
+                None => { return None; }
+            }
+        }
     }
 }
 
 #[macro_export]
-/// Create a `MultiMap` from a list of key value pairs
+/// Create a `BTreeMultiMap` from a list of key value pairs
 ///
 /// ## Example
 ///
 /// ```
-/// # use multimap::MultiMap;
-/// #[macro_use] extern crate multimap;
+/// # use btreemultimap::BTreeMultiMap;
+/// #[macro_use] extern crate btreemultimap;
 /// # fn main(){
 ///
-/// let map = multimap!(
+/// let map = btreemultimap!(
 ///     "dog" => "husky",
 ///     "dog" => "retreaver",
 ///     "dog" => "shiba inu",
@@ -874,13 +1087,13 @@ impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
 /// # }
 ///
 /// ```
-macro_rules! multimap{
+macro_rules! btreemultimap{
     (@replace_with_unit $_t:tt) => { () };
-    (@count $($key:expr),*) => { <[()]>::len(&[$($crate::multimap! { @replace_with_unit $key }),*]) };
+    (@count $($key:expr),*) => { <[()]>::len(&[$($crate::btreemultimap! { @replace_with_unit $key }),*]) };
     
     ($($key:expr => $value:expr),* $(,)?)=>{
         {
-            let mut map = $crate::MultiMap::with_capacity($crate::multimap! { @count $($key),* });
+            let mut map = $crate::BTreeMultiMap::new();
             $(
                 map.insert($key,$value);
              )*
@@ -892,42 +1105,37 @@ macro_rules! multimap{
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
     use std::iter::FromIterator;
 
     use super::*;
 
     #[test]
     fn create() {
-        let _: MultiMap<usize, usize> = MultiMap { inner: HashMap::new() };
+        let _: BTreeMultiMap<usize, usize> = BTreeMultiMap { inner: BTreeMap::new() };
     }
 
     #[test]
     fn new() {
-        let _: MultiMap<usize, usize> = MultiMap::new();
-    }
-
-    #[test]
-    fn with_capacity() {
-        let _: MultiMap<usize, usize> = MultiMap::with_capacity(20);
+        let _: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
     }
 
     #[test]
     fn insert() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 3);
     }
 
     #[test]
     fn insert_many() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert_many(1, vec![3, 4]);
         assert_eq!(Some(&vec![3, 4]), m.get_vec(&1));
     }
 
     #[test]
     fn insert_many_again() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 2);
         m.insert_many(1, vec![3, 4]);
         assert_eq!(Some(&vec![2, 3, 4]), m.get_vec(&1));
@@ -935,14 +1143,14 @@ mod tests {
 
     #[test]
     fn insert_many_from_slice() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert_many_from_slice(1, &[3, 4]);
         assert_eq!(Some(&vec![3, 4]), m.get_vec(&1));
     }
 
     #[test]
     fn insert_many_from_slice_again() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 2);
         m.insert_many_from_slice(1, &[3, 4]);
         assert_eq!(Some(&vec![2, 3, 4]), m.get_vec(&1));
@@ -950,7 +1158,7 @@ mod tests {
 
     #[test]
     fn insert_existing() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 3);
         m.insert(1, 4);
     }
@@ -958,13 +1166,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn index_no_entry() {
-        let m: MultiMap<usize, usize> = MultiMap::new();
+        let m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         &m[&1];
     }
 
     #[test]
     fn index() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         let values = m[&1];
         assert_eq!(values, 42);
@@ -972,20 +1180,20 @@ mod tests {
 
     #[test]
     fn contains_key_true() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         assert!(m.contains_key(&1));
     }
 
     #[test]
     fn contains_key_false() {
-        let m: MultiMap<usize, usize> = MultiMap::new();
+        let m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         assert_eq!(m.contains_key(&1), false);
     }
 
     #[test]
     fn len() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(2, 1337);
         m.insert(3, 99);
@@ -994,14 +1202,14 @@ mod tests {
 
     #[test]
     fn remove_not_present() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         let v = m.remove(&1);
         assert_eq!(v, None);
     }
 
     #[test]
     fn remove_present() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         let v = m.remove(&1);
         assert_eq!(v, Some(vec![42]));
@@ -1009,53 +1217,47 @@ mod tests {
 
     #[test]
     fn get_not_present() {
-        let m: MultiMap<usize, usize> = MultiMap::new();
+        let m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         assert_eq!(m.get(&1), None);
     }
 
     #[test]
     fn get_present() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         assert_eq!(m.get(&1), Some(&42));
     }
 
     #[test]
     fn get_vec_not_present() {
-        let m: MultiMap<usize, usize> = MultiMap::new();
+        let m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         assert_eq!(m.get_vec(&1), None);
     }
 
     #[test]
     fn get_vec_present() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 1337);
         assert_eq!(m.get_vec(&1), Some(&vec![42, 1337]));
     }
 
     #[test]
-    fn capacity() {
-        let m: MultiMap<usize, usize> = MultiMap::with_capacity(20);
-        assert!(m.capacity() >= 20);
-    }
-
-    #[test]
     fn is_empty_true() {
-        let m: MultiMap<usize, usize> = MultiMap::new();
+        let m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         assert_eq!(m.is_empty(), true);
     }
 
     #[test]
     fn is_empty_false() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         assert_eq!(m.is_empty(), false);
     }
 
     #[test]
     fn clear() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.clear();
         assert!(m.is_empty());
@@ -1063,7 +1265,7 @@ mod tests {
 
     #[test]
     fn get_mut() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         if let Some(v) = m.get_mut(&1) {
             *v = 1337;
@@ -1073,7 +1275,7 @@ mod tests {
 
     #[test]
     fn get_vec_mut() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 1337);
         if let Some(v) = m.get_vec_mut(&1) {
@@ -1085,7 +1287,7 @@ mod tests {
 
     #[test]
     fn keys() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(2, 42);
         m.insert(4, 42);
@@ -1101,7 +1303,7 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 42);
         m.insert(4, 42);
@@ -1111,14 +1313,14 @@ mod tests {
 
         for _ in iter.by_ref().take(2) {}
 
-        assert_eq!(iter.len(), 1);
+        assert_eq!(iter.len(), 2);
     }
 
     #[test]
     fn intoiterator_for_reference_type() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
-        m.insert(1, 42);
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 43);
+        m.insert(1, 44);
         m.insert(4, 42);
         m.insert(8, 42);
 
@@ -1128,18 +1330,18 @@ mod tests {
             assert!(keys.contains(key));
 
             if key == &1 {
-                assert_eq!(value, &vec![42, 43]);
+                assert!(value == &43 || value == &44);
             } else {
-                assert_eq!(value, &vec![42]);
+                assert_eq!(value, &42);
             }
         }
     }
 
     #[test]
     fn intoiterator_for_mutable_reference_type() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
-        m.insert(1, 42);
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 43);
+        m.insert(1, 44);
         m.insert(4, 42);
         m.insert(8, 42);
 
@@ -1149,19 +1351,19 @@ mod tests {
             assert!(keys.contains(key));
 
             if key == &1 {
-                assert_eq!(value, &vec![42, 43]);
-                value.push(666);
+                assert!(value == &43 || value == &44);
+                *value = 666;
             } else {
-                assert_eq!(value, &vec![42]);
+                assert_eq!(value, &42);
             }
         }
 
-        assert_eq!(m.get_vec(&1), Some(&vec![42, 43, 666]));
+        assert_eq!(m.get_vec(&1), Some(&vec![666, 666]));
     }
 
     #[test]
     fn intoiterator_consuming() {
-        let mut m: MultiMap<usize, usize> = MultiMap::new();
+        let mut m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 43);
         m.insert(4, 42);
@@ -1181,28 +1383,12 @@ mod tests {
     }
 
     #[test]
-    fn test_fmt_debug() {
-        let mut map = MultiMap::new();
-        let empty: MultiMap<i32, i32> = MultiMap::new();
-
-        map.insert(1, 2);
-        map.insert(1, 5);
-        map.insert(1, -1);
-        map.insert(3, 4);
-
-        let map_str = format!("{:?}", map);
-
-        assert!(map_str == "{1: [2, 5, -1], 3: [4]}" || map_str == "{3: [4], 1: [2, 5, -1]}");
-        assert_eq!(format!("{:?}", empty), "{}");
-    }
-
-    #[test]
     fn test_eq() {
-        let mut m1 = MultiMap::new();
+        let mut m1 = BTreeMultiMap::new();
         m1.insert(1, 2);
         m1.insert(2, 3);
         m1.insert(3, 4);
-        let mut m2 = MultiMap::new();
+        let mut m2 = BTreeMultiMap::new();
         m2.insert(1, 2);
         m2.insert(2, 3);
         assert!(m1 != m2);
@@ -1216,13 +1402,13 @@ mod tests {
 
     #[test]
     fn test_default() {
-        let _: MultiMap<u8, u8> = Default::default();
+        let _: BTreeMultiMap<u8, u8> = Default::default();
     }
 
     #[test]
     fn test_from_iterator() {
         let vals: Vec<(&str, i64)> = vec![("foo", 123), ("bar", 456), ("foo", 789)];
-        let multimap: MultiMap<&str, i64> = MultiMap::from_iter(vals);
+        let multimap: BTreeMultiMap<&str, i64> = BTreeMultiMap::from_iter(vals);
 
         let foo_vals: &Vec<i64> = multimap.get_vec("foo").unwrap();
         assert!(foo_vals.contains(&123));
@@ -1233,32 +1419,32 @@ mod tests {
     }
 
     #[test]
-    fn test_extend_consuming_hashmap() {
-        let mut a = MultiMap::new();
+    fn test_extend_consuming_btree_hashmap() {
+        let mut a = BTreeMultiMap::new();
         a.insert(1, 42);
 
-        let mut b = HashMap::new();
+        let mut b = BTreeMap::new();
         b.insert(1, 43);
         b.insert(2, 666);
 
         a.extend(b);
 
-        assert_eq!(a.len(), 2);
+        assert_eq!(a.len(), 3);
         assert_eq!(a.get_vec(&1), Some(&vec![42, 43]));
     }
 
     #[test]
-    fn test_extend_ref_hashmap() {
-        let mut a = MultiMap::new();
+    fn test_extend_ref_btreemap() {
+        let mut a = BTreeMultiMap::new();
         a.insert(1, 42);
 
-        let mut b = HashMap::new();
+        let mut b = BTreeMap::new();
         b.insert(1, 43);
         b.insert(2, 666);
 
         a.extend(&b);
 
-        assert_eq!(a.len(), 2);
+        assert_eq!(a.len(), 3);
         assert_eq!(a.get_vec(&1), Some(&vec![42, 43]));
         assert_eq!(b.len(), 2);
         assert_eq!(b[&1], 43);
@@ -1266,41 +1452,41 @@ mod tests {
 
     #[test]
     fn test_extend_consuming_multimap() {
-        let mut a = MultiMap::new();
+        let mut a = BTreeMultiMap::new();
         a.insert(1, 42);
 
-        let mut b = MultiMap::new();
+        let mut b = BTreeMultiMap::new();
         b.insert(1, 43);
         b.insert(1, 44);
         b.insert(2, 666);
 
         a.extend(b);
 
-        assert_eq!(a.len(), 2);
+        assert_eq!(a.len(), 4);
         assert_eq!(a.get_vec(&1), Some(&vec![42, 43, 44]));
     }
 
     #[test]
     fn test_extend_ref_multimap() {
-        let mut a = MultiMap::new();
+        let mut a = BTreeMultiMap::new();
         a.insert(1, 42);
 
-        let mut b = MultiMap::new();
+        let mut b = BTreeMultiMap::new();
         b.insert(1, 43);
         b.insert(1, 44);
         b.insert(2, 666);
 
         a.extend(&b);
 
-        assert_eq!(a.len(), 2);
+        assert_eq!(a.len(), 4);
         assert_eq!(a.get_vec(&1), Some(&vec![42, 43, 44]));
-        assert_eq!(b.len(), 2);
+        assert_eq!(b.len(), 3);
         assert_eq!(b.get_vec(&1), Some(&vec![43, 44]));
     }
 
     #[test]
     fn test_entry() {
-        let mut m = MultiMap::new();
+        let mut m = BTreeMultiMap::new();
         m.insert(1, 42);
 
         {
@@ -1316,7 +1502,7 @@ mod tests {
 
     #[test]
     fn test_entry_vec() {
-        let mut m = MultiMap::new();
+        let mut m = BTreeMultiMap::new();
         m.insert(1, 42);
 
         {
@@ -1333,7 +1519,7 @@ mod tests {
 
     #[test]
     fn test_is_vec() {
-        let mut m = MultiMap::new();
+        let mut m = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 1337);
         m.insert(2, 2332);
@@ -1345,13 +1531,13 @@ mod tests {
 
     #[test]
     fn test_macro(){
-        let mut manual_map = MultiMap::new();
+        let mut manual_map = BTreeMultiMap::new();
         manual_map.insert("key1", 42);
-        assert_eq!(manual_map, multimap!("key1" => 42));
+        assert_eq!(manual_map, btreemultimap!("key1" => 42));
 
         manual_map.insert("key1", 1337);
         manual_map.insert("key2", 2332);
-        let macro_map = multimap!{
+        let macro_map = btreemultimap!{
             "key1" =>    42,
             "key1" =>  1337,
             "key2" =>  2332
@@ -1361,7 +1547,7 @@ mod tests {
 
     #[test]
     fn retain_removes_element() {
-        let mut m = MultiMap::new();
+        let mut m = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 99);
         m.retain(|&k, &v| { k == 1 && v == 42 });
@@ -1371,7 +1557,7 @@ mod tests {
 
     #[test]
     fn retain_also_removes_empty_vector() {
-        let mut m = MultiMap::new();
+        let mut m = BTreeMultiMap::new();
         m.insert(1, 42);
         m.insert(1, 99);
         m.insert(2, 42);
