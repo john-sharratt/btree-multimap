@@ -557,18 +557,11 @@ impl<K, V> BTreeMultiMap<K, V>
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
         where F: FnMut(&K, &V) -> bool,
-              K: Clone
     {
-        let mut to_remove = Vec::new();
-        for (key, vector) in &mut self.inner {
+        self.inner.retain(|key, vector| {
             vector.retain(|ref value| f(key, value));
-            if vector.is_empty() {
-                to_remove.push(key.clone());
-            }
-        }
-        for key in to_remove {
-            self.inner.remove(&key);
-        }
+            !vector.is_empty()
+        });
     }
 
     /// Constructs a double-ended iterator over a sub-range of elements in the map.
@@ -661,11 +654,19 @@ impl<K, V> BTreeMultiMap<K, V>
     }
 }
 
-#[derive(Clone)]
 pub struct MultiRange<'a, K, V>
 {
     vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
     inner: Range<'a, K, Vec<V>>
+}
+
+impl<'a, K, V> Clone for MultiRange<'a, K, V> {
+    fn clone(&self) -> Self {
+        Self {
+            vec: self.vec.clone(),
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for MultiRange<'_, K, V> {
@@ -933,11 +934,19 @@ impl<'a, K, V> Extend<(&'a K, &'a Vec<V>)> for BTreeMultiMap<K, V>
     }
 }
 
-#[derive(Clone)]
 pub struct MultiIter<'a, K, V>
 {
     vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
     inner: std::collections::btree_map::Iter<'a, K, Vec<V>>
+}
+
+impl<'a, K, V> Clone for MultiIter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Self {
+            vec: self.vec.clone(),
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 impl<'a, K, V> Iterator for MultiIter<'a, K, V> {
@@ -1314,6 +1323,26 @@ mod tests {
         for _ in iter.by_ref().take(2) {}
 
         assert_eq!(iter.len(), 2);
+    }
+
+    #[test]
+    fn clone_iter_with_not_cloneable_items() {
+        #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+        struct Foo(usize);
+
+        let mut m = BTreeMultiMap::new();
+        m.insert(Foo(1), Foo(42));
+        m.insert(Foo(1), Foo(42));
+        m.insert(Foo(4), Foo(42));
+        m.insert(Foo(8), Foo(42));
+
+        let iter = m.iter();
+
+        let mut iter_clone = iter.clone();
+        for _ in iter_clone.by_ref().take(2) {}
+
+        assert_eq!(iter.len(), 4);
+        assert_eq!(iter_clone.len(), 2);
     }
 
     #[test]
