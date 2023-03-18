@@ -453,7 +453,7 @@ where
     ///     println!("{:?}", key);
     /// }
     /// ```
-    pub fn keys<'a>(&'a self) -> Keys<'a, K, Vec<V>> {
+    pub fn keys(&self) -> Keys<'_, K, Vec<V>> {
         self.inner.keys()
     }
 
