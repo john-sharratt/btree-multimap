@@ -30,7 +30,7 @@ pub enum Entry<'a, K: 'a, V: 'a> {
     Vacant(VacantEntry<'a, K, V>),
 }
 
-impl<'a, K: 'a + Ord, V: 'a> OccupiedEntry<'a, K, V>{
+impl<'a, K: 'a + Ord, V: 'a> OccupiedEntry<'a, K, V> {
     /// Gets a reference to the first item in value in the vector corresponding to entry.
     pub fn get(&self) -> &V {
         &self.inner.get()[0]
@@ -92,7 +92,6 @@ impl<'a, K: 'a + Ord, V: 'a> VacantEntry<'a, K, V> {
         self.inner.insert(values)
     }
 }
-
 
 impl<'a, K: 'a + Ord, V: 'a> Entry<'a, K, V> {
     /// Ensures a value is in the entry by inserting the default if empty, and returns

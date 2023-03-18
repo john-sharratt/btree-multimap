@@ -13,40 +13,43 @@ extern crate serde;
 use std::fmt;
 use std::marker::PhantomData;
 
-use self::serde::{Deserialize, Deserializer, Serialize, Serializer};
 use self::serde::de::{MapAccess, Visitor};
+use self::serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use BTreeMultiMap;
 
-
 impl<K, V> Serialize for BTreeMultiMap<K, V>
-    where K: Serialize + Ord,
-          V: Serialize,
+where
+    K: Serialize + Ord,
+    V: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         self.inner.serialize(serializer)
     }
 }
 
 impl<K, V> BTreeMultiMapVisitor<K, V>
-    where K: Ord
+where
+    K: Ord,
 {
     fn new() -> Self {
         BTreeMultiMapVisitor {
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 }
 
 struct BTreeMultiMapVisitor<K, V> {
-    marker: PhantomData<BTreeMultiMap<K, V>>
+    marker: PhantomData<BTreeMultiMap<K, V>>,
 }
 
 impl<'a, K, V> Visitor<'a> for BTreeMultiMapVisitor<K, V>
-    where K: Deserialize<'a> + Ord,
-          V: Deserialize<'a>,
+where
+    K: Deserialize<'a> + Ord,
+    V: Deserialize<'a>,
 {
     type Value = BTreeMultiMap<K, V>;
 
@@ -55,7 +58,8 @@ impl<'a, K, V> Visitor<'a> for BTreeMultiMapVisitor<K, V>
     }
 
     fn visit_map<M>(self, mut visitor: M) -> Result<Self::Value, M::Error>
-        where M: MapAccess<'a>
+    where
+        M: MapAccess<'a>,
     {
         let mut values = BTreeMultiMap::new();
 
@@ -68,23 +72,24 @@ impl<'a, K, V> Visitor<'a> for BTreeMultiMapVisitor<K, V>
 }
 
 impl<'a, K, V> Deserialize<'a> for BTreeMultiMap<K, V>
-    where K: Deserialize<'a> + Ord,
-          V: Deserialize<'a>,
+where
+    K: Deserialize<'a> + Ord,
+    V: Deserialize<'a>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'a>
+    where
+        D: Deserializer<'a>,
     {
         deserializer.deserialize_map(BTreeMultiMapVisitor::<K, V>::new())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
 
     extern crate serde_test;
 
-    use self::serde_test::{Token, assert_tokens};
+    use self::serde_test::{assert_tokens, Token};
 
     use super::*;
 
@@ -92,10 +97,7 @@ mod tests {
     fn test_empty() {
         let map = BTreeMultiMap::<char, u8>::new();
 
-        assert_tokens(&map, &[
-            Token::Map { len: Some(0) },
-            Token::MapEnd,
-        ]);
+        assert_tokens(&map, &[Token::Map { len: Some(0) }, Token::MapEnd]);
     }
 
     #[test]
@@ -103,14 +105,17 @@ mod tests {
         let mut map = BTreeMultiMap::<char, u8>::new();
         map.insert('x', 1);
 
-        assert_tokens(&map, &[
-            Token::Map { len: Some(1) },
-            Token::Char('x'),
-            Token::Seq { len: Some(1) },
-            Token::U8(1),
-            Token::SeqEnd,
-            Token::MapEnd,
-        ]);
+        assert_tokens(
+            &map,
+            &[
+                Token::Map { len: Some(1) },
+                Token::Char('x'),
+                Token::Seq { len: Some(1) },
+                Token::U8(1),
+                Token::SeqEnd,
+                Token::MapEnd,
+            ],
+        );
     }
 
     #[test]
@@ -121,16 +126,19 @@ mod tests {
         map.insert('x', 1);
         map.insert('x', 5);
 
-        assert_tokens(&map, &[
-            Token::Map { len: Some(1) },
-            Token::Char('x'),
-            Token::Seq { len: Some(4) },
-            Token::U8(1),
-            Token::U8(3),
-            Token::U8(1),
-            Token::U8(5),
-            Token::SeqEnd,
-            Token::MapEnd,
-        ]);
+        assert_tokens(
+            &map,
+            &[
+                Token::Map { len: Some(1) },
+                Token::Char('x'),
+                Token::Seq { len: Some(4) },
+                Token::U8(1),
+                Token::U8(3),
+                Token::U8(1),
+                Token::U8(5),
+                Token::SeqEnd,
+                Token::MapEnd,
+            ],
+        );
     }
 }
