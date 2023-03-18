@@ -270,7 +270,7 @@ where
         K: Borrow<Q>,
         Q: Ord,
     {
-        self.inner.get(k).map(|a| a.iter().next()).flatten()
+        self.inner.get(k).and_then(|a| a.iter().next())
     }
 
     /// Returns a mutable reference to the first item in the vector corresponding to
@@ -297,7 +297,7 @@ where
         K: Borrow<Q>,
         Q: Ord,
     {
-        self.inner.get_mut(k).map(|a| a.iter_mut().next()).flatten()
+        self.inner.get_mut(k).and_then(|a| a.iter_mut().next())
     }
 
     /// Returns a reference to the vector corresponding to the key.
@@ -571,7 +571,7 @@ where
         F: FnMut(&K, &V) -> bool,
     {
         self.inner.retain(|key, vector| {
-            vector.retain(|ref value| f(key, value));
+            vector.retain(|value| f(key, value));
             !vector.is_empty()
         });
     }
@@ -1029,7 +1029,7 @@ impl<'a, K, V> ExactSizeIterator for MultiIter<'a, K, V> {
     fn len(&self) -> usize {
         let mut ret: usize = 0;
         for pair in self.inner.clone() {
-            ret = ret + pair.1.len();
+            ret += pair.1.len();
         }
         ret
     }
