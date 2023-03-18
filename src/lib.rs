@@ -1174,6 +1174,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[allow(unused_must_use)]
     fn index_no_entry() {
         let m: BTreeMultiMap<usize, usize> = BTreeMultiMap::new();
         &m[&1];
