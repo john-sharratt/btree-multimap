@@ -6,8 +6,10 @@
 // option. All files in the project carrying such notice may not be copied,
 // modified, or distributed except according to those terms.
 
-use std::collections::btree_map::OccupiedEntry as BTreeMapOccupiedEntry;
-use std::collections::btree_map::VacantEntry as BTreeMapVacantEntry;
+use alloc::collections::btree_map::OccupiedEntry as BTreeMapOccupiedEntry;
+use alloc::collections::btree_map::VacantEntry as BTreeMapVacantEntry;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// A view into a single occupied location in a BTreeMultiMap.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {

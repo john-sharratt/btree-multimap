@@ -6,7 +6,7 @@ readme = "README.md"
 repository = "https://github.com/john-sharratt/btree-multimap.git"
 license = "MIT/Apache-2.0"
 authors = ["Håvar Nøvik <havar.novik@gmail.com>", "Johnathan Sharratt <johnathan.sharratt@gmail.com>"]
-keywords = ["multimap", "btree"]
+keywords = ["multimap", "btree", "no_std"]
 documentation = "https://docs.rs/btreemultimap/"
 exclude = [
     ".travis.yml",
@@ -14,11 +14,13 @@ exclude = [
 ]
 
 [features]
-serde_impl = ["serde"]
+serde_impl = ["dep:serde"]
 default = ["serde_impl"]
+# The "std" feature only enables running tests at present.
+std = ["dep:serde_test"]
 
 [dependencies]
-serde = { version = "~1.0", optional = true }
-
-[dev-dependencies]
-serde_test = "~1.0"
+serde = { version = "~1.0", default-features = false, features = ["alloc"], optional = true }
+# serde_test must be a regular dependency; if it were a dev_dependency it would always enable the
+# "std" feature in serde and could not be optional.
+serde_test = { version = "~1.0", optional = true }

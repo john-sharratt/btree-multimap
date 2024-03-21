@@ -1,3 +1,4 @@
+#![no_std]
 #![forbid(unsafe_code)]
 // Copyright (c) 2016 btree multimap developers
 //
@@ -64,13 +65,17 @@
 //! assert_eq!(map.get_vec("key1"), Some(&vec![42, 1337]));
 //! ```
 
-use std::borrow::Borrow;
-use std::collections::btree_map::{IntoIter, Keys};
-use std::collections::btree_map::{Range, RangeMut};
-use std::collections::BTreeMap;
-use std::fmt::{self, Debug};
-use std::iter::{FromIterator, IntoIterator, Iterator};
-use std::ops::{Index, RangeBounds};
+extern crate alloc;
+
+use alloc::borrow::{Borrow, ToOwned};
+use alloc::collections::btree_map::{IntoIter, Keys};
+use alloc::collections::btree_map::{Range, RangeMut};
+use alloc::collections::BTreeMap;
+use alloc::fmt::{self, Debug};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::iter::FromIterator;
+use core::ops::{Index, RangeBounds};
 
 pub use entry::{Entry, OccupiedEntry, VacantEntry};
 
@@ -542,7 +547,7 @@ where
     /// assert_eq!(m.get_vec(&1), Some(&vec![44, 50]));
     /// ```
     pub fn entry(&mut self, k: K) -> Entry<K, V> {
-        use std::collections::btree_map::Entry as BTreeMapEntry;
+        use alloc::collections::btree_map::Entry as BTreeMapEntry;
         match self.inner.entry(k) {
             BTreeMapEntry::Occupied(entry) => Entry::Occupied(OccupiedEntry { inner: entry }),
             BTreeMapEntry::Vacant(entry) => Entry::Vacant(VacantEntry { inner: entry }),
@@ -667,7 +672,7 @@ where
 }
 
 pub struct MultiRange<'a, K, V> {
-    vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
+    vec: Option<(&'a K, core::slice::Iter<'a, V>)>,
     inner: Range<'a, K, Vec<V>>,
 }
 
@@ -743,7 +748,7 @@ impl<'a, K, V> DoubleEndedIterator for MultiRange<'a, K, V> {
 }
 
 pub struct MultiRangeMut<'a, K, V> {
-    vec: Option<(&'a K, std::slice::IterMut<'a, V>)>,
+    vec: Option<(&'a K, core::slice::IterMut<'a, V>)>,
     inner: RangeMut<'a, K, Vec<V>>,
 }
 
@@ -973,8 +978,8 @@ where
 }
 
 pub struct MultiIter<'a, K, V> {
-    vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
-    inner: std::collections::btree_map::Iter<'a, K, Vec<V>>,
+    vec: Option<(&'a K, core::slice::Iter<'a, V>)>,
+    inner: alloc::collections::btree_map::Iter<'a, K, Vec<V>>,
 }
 
 impl<'a, K, V> Clone for MultiIter<'a, K, V> {
@@ -1057,8 +1062,8 @@ impl<'a, K, V> DoubleEndedIterator for MultiIter<'a, K, V> {
 }
 
 pub struct MultiIterMut<'a, K, V> {
-    vec: Option<(&'a K, std::slice::IterMut<'a, V>)>,
-    inner: std::collections::btree_map::IterMut<'a, K, Vec<V>>,
+    vec: Option<(&'a K, core::slice::IterMut<'a, V>)>,
+    inner: alloc::collections::btree_map::IterMut<'a, K, Vec<V>>,
 }
 
 impl<'a, K, V> Iterator for MultiIterMut<'a, K, V> {
@@ -1157,9 +1162,6 @@ macro_rules! btreemultimap{
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-    use std::iter::FromIterator;
-
     use super::*;
 
     #[test]
