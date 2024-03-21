@@ -204,10 +204,10 @@ where
     /// assert_eq!(map.contains_key(&1), true);
     /// assert_eq!(map.contains_key(&2), false);
     /// ```
-    pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+    pub fn contains_key<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.contains_key(k)
     }
@@ -246,10 +246,10 @@ where
     /// assert_eq!(map.remove(&1), Some(vec![42, 1337]));
     /// assert_eq!(map.remove(&1), None);
     /// ```
-    pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<Vec<V>>
+    pub fn remove<Q>(&mut self, k: &Q) -> Option<Vec<V>>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.remove(k)
     }
@@ -270,10 +270,10 @@ where
     /// map.insert(1, 1337);
     /// assert_eq!(map.get(&1), Some(&42));
     /// ```
-    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
+    pub fn get<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get(k).and_then(|a| a.iter().next())
     }
@@ -297,10 +297,10 @@ where
     /// }
     /// assert_eq!(map[&1], 99);
     /// ```
-    pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+    pub fn get_mut<Q>(&mut self, k: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get_mut(k).and_then(|a| a.iter_mut().next())
     }
@@ -320,10 +320,10 @@ where
     /// map.insert(1, 1337);
     /// assert_eq!(map.get_vec(&1), Some(&vec![42, 1337]));
     /// ```
-    pub fn get_vec<Q: ?Sized>(&self, k: &Q) -> Option<&Vec<V>>
+    pub fn get_vec<Q>(&self, k: &Q) -> Option<&Vec<V>>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get(k)
     }
@@ -343,10 +343,10 @@ where
     /// assert_eq!(map.get_key_values(&1), Some((&1, &vec!["a"])));
     /// assert_eq!(map.get_key_values(&2), None);
     /// ```
-    pub fn get_key_values<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &Vec<V>)>
+    pub fn get_key_values<Q>(&self, k: &Q) -> Option<(&K, &Vec<V>)>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get_key_value(k)
     }
@@ -370,10 +370,10 @@ where
     /// }
     /// assert_eq!(map.get_vec(&1), Some(&vec![1991, 2332]));
     /// ```
-    pub fn get_vec_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut Vec<V>>
+    pub fn get_vec_mut<Q>(&mut self, k: &Q) -> Option<&mut Vec<V>>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get_mut(k)
     }
@@ -397,10 +397,10 @@ where
     /// assert_eq!(map.is_vec(&2), false);  // key is single-valued
     /// assert_eq!(map.is_vec(&3), false);  // key not in map
     /// ```
-    pub fn is_vec<Q: ?Sized>(&self, k: &Q) -> bool
+    pub fn is_vec<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         match self.get_vec(k) {
             Some(val) => val.len() > 1,
@@ -616,9 +616,9 @@ where
     /// assert_eq!(Some((&8, &"c")), iter.next());
     /// assert_eq!(None, iter.next());
     /// ```
-    pub fn range<T: ?Sized, R>(&self, range: R) -> MultiRange<'_, K, V>
+    pub fn range<T, R>(&self, range: R) -> MultiRange<'_, K, V>
     where
-        T: Ord,
+        T: Ord + ?Sized,
         K: Borrow<T>,
         R: RangeBounds<T>,
     {
@@ -658,9 +658,9 @@ where
     ///     println!("{} => {}", name, balance);
     /// }
     /// ```
-    pub fn range_mut<T: ?Sized, R>(&mut self, range: R) -> MultiRangeMut<'_, K, V>
+    pub fn range_mut<T, R>(&mut self, range: R) -> MultiRangeMut<'_, K, V>
     where
-        T: Ord,
+        T: Ord + ?Sized,
         K: Borrow<T>,
         R: RangeBounds<T>,
     {
