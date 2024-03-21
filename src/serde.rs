@@ -10,8 +10,8 @@
 
 extern crate serde;
 
-use std::fmt;
-use std::marker::PhantomData;
+use alloc::fmt;
+use core::marker::PhantomData;
 
 use self::serde::de::{MapAccess, Visitor};
 use self::serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -84,7 +84,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
 
     extern crate serde_test;

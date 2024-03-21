@@ -1,3 +1,4 @@
+#![no_std]
 #![forbid(unsafe_code)]
 // Copyright (c) 2016 btree multimap developers
 //
@@ -64,13 +65,17 @@
 //! assert_eq!(map.get_vec("key1"), Some(&vec![42, 1337]));
 //! ```
 
-use std::borrow::Borrow;
-use std::collections::btree_map::{IntoIter, Keys};
-use std::collections::btree_map::{Range, RangeMut};
-use std::collections::BTreeMap;
-use std::fmt::{self, Debug};
-use std::iter::{FromIterator, IntoIterator, Iterator};
-use std::ops::{Index, RangeBounds};
+extern crate alloc;
+
+use alloc::borrow::{Borrow, ToOwned};
+use alloc::collections::btree_map::{IntoIter, Keys};
+use alloc::collections::btree_map::{Range, RangeMut};
+use alloc::collections::BTreeMap;
+use alloc::fmt::{self, Debug};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::iter::FromIterator;
+use core::ops::{Index, RangeBounds};
 
 pub use entry::{Entry, OccupiedEntry, VacantEntry};
 
@@ -199,10 +204,10 @@ where
     /// assert_eq!(map.contains_key(&1), true);
     /// assert_eq!(map.contains_key(&2), false);
     /// ```
-    pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+    pub fn contains_key<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.contains_key(k)
     }
@@ -241,10 +246,10 @@ where
     /// assert_eq!(map.remove(&1), Some(vec![42, 1337]));
     /// assert_eq!(map.remove(&1), None);
     /// ```
-    pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<Vec<V>>
+    pub fn remove<Q>(&mut self, k: &Q) -> Option<Vec<V>>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.remove(k)
     }
@@ -265,10 +270,10 @@ where
     /// map.insert(1, 1337);
     /// assert_eq!(map.get(&1), Some(&42));
     /// ```
-    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
+    pub fn get<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get(k).and_then(|a| a.iter().next())
     }
@@ -292,10 +297,10 @@ where
     /// }
     /// assert_eq!(map[&1], 99);
     /// ```
-    pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+    pub fn get_mut<Q>(&mut self, k: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get_mut(k).and_then(|a| a.iter_mut().next())
     }
@@ -315,10 +320,10 @@ where
     /// map.insert(1, 1337);
     /// assert_eq!(map.get_vec(&1), Some(&vec![42, 1337]));
     /// ```
-    pub fn get_vec<Q: ?Sized>(&self, k: &Q) -> Option<&Vec<V>>
+    pub fn get_vec<Q>(&self, k: &Q) -> Option<&Vec<V>>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get(k)
     }
@@ -338,10 +343,10 @@ where
     /// assert_eq!(map.get_key_values(&1), Some((&1, &vec!["a"])));
     /// assert_eq!(map.get_key_values(&2), None);
     /// ```
-    pub fn get_key_values<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &Vec<V>)>
+    pub fn get_key_values<Q>(&self, k: &Q) -> Option<(&K, &Vec<V>)>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get_key_value(k)
     }
@@ -365,10 +370,10 @@ where
     /// }
     /// assert_eq!(map.get_vec(&1), Some(&vec![1991, 2332]));
     /// ```
-    pub fn get_vec_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut Vec<V>>
+    pub fn get_vec_mut<Q>(&mut self, k: &Q) -> Option<&mut Vec<V>>
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.inner.get_mut(k)
     }
@@ -392,10 +397,10 @@ where
     /// assert_eq!(map.is_vec(&2), false);  // key is single-valued
     /// assert_eq!(map.is_vec(&3), false);  // key not in map
     /// ```
-    pub fn is_vec<Q: ?Sized>(&self, k: &Q) -> bool
+    pub fn is_vec<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         match self.get_vec(k) {
             Some(val) => val.len() > 1,
@@ -542,7 +547,7 @@ where
     /// assert_eq!(m.get_vec(&1), Some(&vec![44, 50]));
     /// ```
     pub fn entry(&mut self, k: K) -> Entry<K, V> {
-        use std::collections::btree_map::Entry as BTreeMapEntry;
+        use alloc::collections::btree_map::Entry as BTreeMapEntry;
         match self.inner.entry(k) {
             BTreeMapEntry::Occupied(entry) => Entry::Occupied(OccupiedEntry { inner: entry }),
             BTreeMapEntry::Vacant(entry) => Entry::Vacant(VacantEntry { inner: entry }),
@@ -611,9 +616,9 @@ where
     /// assert_eq!(Some((&8, &"c")), iter.next());
     /// assert_eq!(None, iter.next());
     /// ```
-    pub fn range<T: ?Sized, R>(&self, range: R) -> MultiRange<'_, K, V>
+    pub fn range<T, R>(&self, range: R) -> MultiRange<'_, K, V>
     where
-        T: Ord,
+        T: Ord + ?Sized,
         K: Borrow<T>,
         R: RangeBounds<T>,
     {
@@ -653,9 +658,9 @@ where
     ///     println!("{} => {}", name, balance);
     /// }
     /// ```
-    pub fn range_mut<T: ?Sized, R>(&mut self, range: R) -> MultiRangeMut<'_, K, V>
+    pub fn range_mut<T, R>(&mut self, range: R) -> MultiRangeMut<'_, K, V>
     where
-        T: Ord,
+        T: Ord + ?Sized,
         K: Borrow<T>,
         R: RangeBounds<T>,
     {
@@ -667,7 +672,7 @@ where
 }
 
 pub struct MultiRange<'a, K, V> {
-    vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
+    vec: Option<(&'a K, core::slice::Iter<'a, V>)>,
     inner: Range<'a, K, Vec<V>>,
 }
 
@@ -743,7 +748,7 @@ impl<'a, K, V> DoubleEndedIterator for MultiRange<'a, K, V> {
 }
 
 pub struct MultiRangeMut<'a, K, V> {
-    vec: Option<(&'a K, std::slice::IterMut<'a, V>)>,
+    vec: Option<(&'a K, core::slice::IterMut<'a, V>)>,
     inner: RangeMut<'a, K, Vec<V>>,
 }
 
@@ -973,8 +978,8 @@ where
 }
 
 pub struct MultiIter<'a, K, V> {
-    vec: Option<(&'a K, std::slice::Iter<'a, V>)>,
-    inner: std::collections::btree_map::Iter<'a, K, Vec<V>>,
+    vec: Option<(&'a K, core::slice::Iter<'a, V>)>,
+    inner: alloc::collections::btree_map::Iter<'a, K, Vec<V>>,
 }
 
 impl<'a, K, V> Clone for MultiIter<'a, K, V> {
@@ -1057,8 +1062,8 @@ impl<'a, K, V> DoubleEndedIterator for MultiIter<'a, K, V> {
 }
 
 pub struct MultiIterMut<'a, K, V> {
-    vec: Option<(&'a K, std::slice::IterMut<'a, V>)>,
-    inner: std::collections::btree_map::IterMut<'a, K, Vec<V>>,
+    vec: Option<(&'a K, core::slice::IterMut<'a, V>)>,
+    inner: alloc::collections::btree_map::IterMut<'a, K, Vec<V>>,
 }
 
 impl<'a, K, V> Iterator for MultiIterMut<'a, K, V> {
@@ -1157,9 +1162,6 @@ macro_rules! btreemultimap{
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-    use std::iter::FromIterator;
-
     use super::*;
 
     #[test]
